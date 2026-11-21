@@ -20,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: custom-features
+          ref: main
           fetch-depth: 0
 
       - name: Configure Git
@@ -60,8 +60,8 @@ jobs:
         if: steps.check_release.outputs.needs_update == 'true'
         run: |
           LATEST_TAG="${{ steps.check_release.outputs.latest_tag }}"
-          echo "Merging $LATEST_TAG into custom-features..."
-          git merge "$LATEST_TAG" -m "Merge upstream $LATEST_TAG into custom-features" --no-edit
+          echo "Merging $LATEST_TAG into main..."
+          git merge "$LATEST_TAG" -m "Merge upstream $LATEST_TAG into main" --no-edit
 
           # Update gradle.properties with new version
           NEW_VERSION="${LATEST_TAG#v}"
@@ -125,7 +125,7 @@ jobs:
           EOF
           git add gradle.properties patches-bundle.json
           git diff --cached --quiet || git commit -m "Bump version to $VERSION and update patches-bundle.json"
-          git push origin custom-features
+          git push origin main
 
       - name: Publish GitHub Release
         if: steps.check_release.outputs.needs_update == 'true'

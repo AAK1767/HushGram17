@@ -1,7 +1,7 @@
 {
   "name": "HushGram17",
-  "created_at": "2026-11-21T15:15:00",
-  "description": "## [0.0.21-hg17.4](https://github.com/AAK1767/HushGram17/releases/tag/v0.0.21-hg17.4) (2026-11-21)\n\n### Features in HushGram17\n\n* **Save Instants**: In-app viewer, group by user, delete confirmation, allowlist filter, and deduplication fix.\n* Full upstream HushGram 0.0.21 feature set included.",
+  "created_at": "2026-11-21T15:17:16",
+  "description": "HushGram17 v0.0.21-hg17.4 — personal fork with Save Instants patch.",
   "download_url": "https://github.com/AAK1767/HushGram17/releases/download/v0.0.21-hg17.4/patches-0.0.21.mpp",
   "signature_download_url": "",
   "version": "0.0.21-hg17.4"

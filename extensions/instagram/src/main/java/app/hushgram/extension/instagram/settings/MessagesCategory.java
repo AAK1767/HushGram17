@@ -6,6 +6,7 @@
  */
 package app.hushgram.extension.instagram.settings;
 
+import static app.hushgram.extension.instagram.settings.HushgramPreferenceFragment.Row;
 import static app.hushgram.extension.instagram.settings.HushgramPreferenceFragment.callBlockAccountsRow;
 import static app.hushgram.extension.instagram.settings.HushgramPreferenceFragment.callBlockModeRow;
 import static app.hushgram.extension.instagram.settings.HushgramPreferenceFragment.category;
@@ -13,6 +14,7 @@ import static app.hushgram.extension.instagram.settings.HushgramPreferenceFragme
 import static app.hushgram.extension.instagram.settings.HushgramPreferenceFragment.chatGlassTintRow;
 import static app.hushgram.extension.instagram.settings.HushgramPreferenceFragment.lockDelayRow;
 import static app.hushgram.extension.instagram.settings.HushgramPreferenceFragment.lockToggle;
+import static app.hushgram.extension.instagram.settings.HushgramPreferenceFragment.mark;
 import static app.hushgram.extension.instagram.settings.HushgramPreferenceFragment.toggle;
 import static app.hushgram.extension.instagram.settings.HushgramPreferenceFragment.unlockWithRow;
 
@@ -101,6 +103,15 @@ final class MessagesCategory {
                 messages.addPreference(toggle(context, Settings.SAVE_INSTANTS, L10n.t("Save Instants"),
                         L10n.t("Keeps received view-once Instants on this phone while you view them, so they can "
                                 + "be reopened or downloaded later.")));
+                Row vaultRow = new Row(context);
+                vaultRow.setTitle(L10n.t("Saved Instants"));
+                vaultRow.setSummary(L10n.t("Browse received Instants captured on this phone and download them."));
+                vaultRow.setPersistent(false);
+                vaultRow.setOnPreferenceClickListener(tapped -> {
+                    InstantsVaultPage.open(tapped.getContext(), tapped);
+                    return true;
+                });
+                messages.addPreference(mark(vaultRow, SettingsIcons.DOWNLOADS));
             }
             if (build.contains(PatchFamily.THREAD_SEEN)) {
                 messages.addPreference(toggle(context, Settings.READ_WITHOUT_SEEN_RECEIPT,

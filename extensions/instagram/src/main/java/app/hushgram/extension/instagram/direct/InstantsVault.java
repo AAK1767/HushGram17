@@ -1,5 +1,6 @@
 /*
  * Copyright 2026 HushGram contributors
+ * https://github.com/SysAdminDoc/HushGram
  */
 package app.hushgram.extension.instagram.direct;
 
@@ -82,10 +83,10 @@ public final class InstantsVault {
         }
     }
 
-    static final class Database extends SQLiteOpenHelper {
+    public static final class Database extends SQLiteOpenHelper {
         private static volatile Database instance;
 
-        static synchronized Database get(Context context) {
+        public static synchronized Database get(Context context) {
             if (instance == null) instance = new Database(context.getApplicationContext());
             return instance;
         }
@@ -109,7 +110,7 @@ public final class InstantsVault {
         @Override
         public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {}
 
-        boolean has(String id) {
+        public boolean has(String id) {
             try (Cursor cursor = getReadableDatabase().query(
                     "instants", new String[]{"media_id"}, "media_id=?",
                     new String[]{id}, null, null, null, "1")) {
@@ -119,7 +120,7 @@ public final class InstantsVault {
             }
         }
 
-        void insert(String id, String username, String imageUrl, String videoUrl,
+        public void insert(String id, String username, String imageUrl, String videoUrl,
                     boolean video, Long takenAtMillis) {
             try {
                 ContentValues values = new ContentValues();
@@ -137,7 +138,7 @@ public final class InstantsVault {
             }
         }
 
-        List<String[]> allRows() {
+        public List<String[]> allRows() {
             List<String[]> rows = new ArrayList<>();
             try (Cursor cursor = getReadableDatabase().query(
                     "instants",
@@ -158,6 +159,37 @@ public final class InstantsVault {
                 Logger.printException(() -> "Save Instants: could not read the vault", failure);
             }
             return rows;
+        }
+
+        /** Returns [image_url, video_url, is_video("0"/"1")] for the given id, or null. */
+        public String[] getUrls(String id) {
+            try (Cursor cursor = getReadableDatabase().query(
+                    "instants", new String[]{"image_url", "video_url", "is_video"},
+                    "media_id=?", new String[]{id}, null, null, null, "1")) {
+                if (!cursor.moveToFirst()) return null;
+                return new String[]{cursor.getString(0), cursor.getString(1),
+                        String.valueOf(cursor.getInt(2))};
+            } catch (Throwable ignored) {
+                return null;
+            }
+        }
+
+        /** Removes a single row by id. */
+        public void delete(String id) {
+            try {
+                getWritableDatabase().delete("instants", "media_id=?", new String[]{id});
+            } catch (Throwable failure) {
+                Logger.printException(() -> "Save Instants: could not delete from vault", failure);
+            }
+        }
+
+        /** Removes all rows. */
+        public void clearAll() {
+            try {
+                getWritableDatabase().delete("instants", null, null);
+            } catch (Throwable failure) {
+                Logger.printException(() -> "Save Instants: clearAll failed", failure);
+            }
         }
     }
 }

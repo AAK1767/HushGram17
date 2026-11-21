@@ -421,16 +421,30 @@ final class InstantsVaultPage {
         return kept;
     }
 
+    private static void confirm(Context context, String title, String message, String positiveLabel, Runnable onConfirm) {
+        new AlertDialog.Builder(context)
+                .setTitle(title)
+                .setMessage(message)
+                .setPositiveButton(positiveLabel, (d, w) -> onConfirm.run())
+                .setNegativeButton(L10n.t("Cancel"), null)
+                .show();
+    }
+
     private void clearAll() {
         Context context = dialog.getContext();
-        Utils.runOnBackgroundThread(() -> {
-            InstantsVault.Database.get(context).clearAll();
-            forgetPictures();
-            Utils.runOnMainThread(() -> {
-                read();
-                Utils.showToastShort(L10n.t("Saved Instants cleared."));
-            });
-        });
+        confirm(context, L10n.t("Clear saved Instants"),
+                L10n.t("Are you sure you want to clear all saved Instants? This cannot be undone."),
+                L10n.t("Clear all"),
+                () -> {
+                    Utils.runOnBackgroundThread(() -> {
+                        InstantsVault.Database.get(context).clearAll();
+                        forgetPictures();
+                        Utils.runOnMainThread(() -> {
+                            read();
+                            Utils.showToastShort(L10n.t("Saved Instants cleared."));
+                        });
+                    });
+                });
     }
 
     private void options(View anchor, Item item) {
@@ -469,16 +483,22 @@ final class InstantsVaultPage {
                 return true;
 
             case DELETE_GROUP:
-                Utils.runOnBackgroundThread(() -> {
-                    InstantsVault.Database.get(context).deleteByUsername(header.groupUsername);
-                    Utils.runOnMainThread(() -> {
-                        List<Item> updated = new ArrayList<>(all);
-                        updated.removeIf(item -> header.groupUsername.equals(item.username));
-                        all = updated;
-                        show();
-                        Utils.showToastShort(L10n.t("Group deleted."));
-                    });
-                });
+                String who = header.groupUsername.isEmpty() ? L10n.t("Unknown") : "@" + header.groupUsername;
+                confirm(context, L10n.t("Delete group"),
+                        L10n.t("Delete all saved Instants from ") + who + "?",
+                        L10n.t("Delete"),
+                        () -> {
+                            Utils.runOnBackgroundThread(() -> {
+                                InstantsVault.Database.get(context).deleteByUsername(header.groupUsername);
+                                Utils.runOnMainThread(() -> {
+                                    List<Item> updated = new ArrayList<>(all);
+                                    updated.removeIf(item -> header.groupUsername.equals(item.username));
+                                    all = updated;
+                                    show();
+                                    Utils.showToastShort(L10n.t("Group deleted."));
+                                });
+                            });
+                        });
                 return true;
 
             default:
@@ -514,13 +534,18 @@ final class InstantsVaultPage {
                 return true;
 
             case REMOVE:
-                InstantsVault.Database.get(context).delete(item.mediaId);
-                forgetPicture(item);
-                List<Item> left = new ArrayList<>(all);
-                left.remove(item);
-                all = left;
-                show();
-                Utils.showToastShort(L10n.t("Removed"));
+                confirm(context, L10n.t("Remove Instant"),
+                        L10n.t("Remove this saved Instant?"),
+                        L10n.t("Remove"),
+                        () -> {
+                            InstantsVault.Database.get(context).delete(item.mediaId);
+                            forgetPicture(item);
+                            List<Item> left = new ArrayList<>(all);
+                            left.remove(item);
+                            all = left;
+                            show();
+                            Utils.showToastShort(L10n.t("Removed"));
+                        });
                 return true;
 
             default:

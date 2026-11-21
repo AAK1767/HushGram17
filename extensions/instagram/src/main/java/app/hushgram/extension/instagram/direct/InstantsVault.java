@@ -22,7 +22,19 @@ import app.hushgram.extension.shared.Utils;
 public final class InstantsVault {
     private InstantsVault() {}
 
-    private static volatile String lastCapturedId;
+    private static volatile String lastCapturedBasePk;
+
+    static String basePk(String id) {
+        if (id == null) return "";
+        int idx = id.indexOf('_');
+        return idx > 0 ? id.substring(0, idx) : id;
+    }
+
+    static String cleanUrl(String url) {
+        if (url == null || url.isEmpty()) return null;
+        int q = url.indexOf('?');
+        return q > 0 ? url.substring(0, q) : url;
+    }
 
     /** Called by the Save Instants patch with the item's Media object. */
     public static void noteMedia(Object media) {
@@ -31,16 +43,20 @@ public final class InstantsVault {
             if (!Utils.settingsReady() || !Settings.SAVE_INSTANTS.get()) return;
 
             String id = InstagramMedia.mediaId(media);
-            if (id == null || id.isEmpty() || id.equals(lastCapturedId)) return;
+            if (id == null || id.isEmpty()) return;
+
+            String currentBase = basePk(id);
 
             Context context = Utils.getContext();
             if (context == null) return;
 
-            Database db = Database.get(context);
-            if (db.has(id)) return;
-
             Object owner = InstagramMedia.owner(media);
             String username = owner == null ? null : InstagramMedia.username(owner);
+
+            // If same base PK was just captured and this call has no username, skip immediately
+            if (!currentBase.isEmpty() && currentBase.equals(lastCapturedBasePk)) {
+                if (username == null || username.trim().isEmpty()) return;
+            }
 
             // Allowlist: if set, only capture from listed users
             String allowlistRaw = Settings.SAVE_INSTANTS_ALLOWLIST.get();
@@ -89,9 +105,11 @@ public final class InstantsVault {
             }
 
             if (videoUrl == null && imageUrl == null) return;
-            db.insert(id, username, imageUrl, videoUrl, videoUrl != null,
+
+            Database db = Database.get(context);
+            db.insertOrUpdate(id, username, imageUrl, videoUrl, videoUrl != null,
                     takenAt == null ? null : takenAt * 1000L);
-            lastCapturedId = id;
+            if (!currentBase.isEmpty()) lastCapturedBasePk = currentBase;
         } catch (Throwable failure) {
             Logger.printException(() -> "Save Instants: could not capture an Instant", failure);
         }
@@ -134,9 +152,84 @@ public final class InstantsVault {
             }
         }
 
-        public void insert(String id, String username, String imageUrl, String videoUrl,
+        /**
+         * Checks if a record matching this Instant already exists by base PK or clean media URLs.
+         * Returns String[]: [media_id, username, is_video("0"/"1")] or null if not found.
+         */
+        public String[] findExisting(String id, String imageUrl, String videoUrl) {
+            String base = basePk(id);
+            String cleanImg = cleanUrl(imageUrl);
+            String cleanVid = cleanUrl(videoUrl);
+
+            try (Cursor cursor = getReadableDatabase().query(
+                    "instants",
+                    new String[]{"media_id", "username", "is_video", "image_url", "video_url"},
+                    null, null, null, null, null)) {
+                while (cursor.moveToNext()) {
+                    String existingId = cursor.getString(0);
+                    String existingBase = basePk(existingId);
+                    String existingUser = cursor.getString(1);
+                    int isVideo = cursor.getInt(2);
+                    String existingImg = cursor.getString(3);
+                    String existingVid = cursor.getString(4);
+
+                    boolean match = false;
+                    if (!base.isEmpty() && base.equals(existingBase)) {
+                        match = true;
+                    }
+                    if (!match && cleanVid != null && existingVid != null && cleanVid.equals(cleanUrl(existingVid))) {
+                        match = true;
+                    }
+                    if (!match && cleanImg != null && existingImg != null && cleanImg.equals(cleanUrl(existingImg))) {
+                        match = true;
+                    }
+
+                    if (match) {
+                        return new String[]{existingId, existingUser, String.valueOf(isVideo)};
+                    }
+                }
+            } catch (Throwable failure) {
+                Logger.printException(() -> "Save Instants: findExisting failed", failure);
+            }
+            return null;
+        }
+
+        public void insertOrUpdate(String id, String username, String imageUrl, String videoUrl,
                     boolean video, Long takenAtMillis) {
             try {
+                String[] existing = findExisting(id, imageUrl, videoUrl);
+                if (existing != null) {
+                    String existingId = existing[0];
+                    String existingUser = existing[1];
+                    boolean hasExistingUser = existingUser != null && !existingUser.trim().isEmpty();
+                    boolean newHasUser = username != null && !username.trim().isEmpty();
+
+                    if (!hasExistingUser && newHasUser) {
+                        // Upgrade existing row with the known username and newer ID/urls
+                        ContentValues values = new ContentValues();
+                        values.put("media_id", id);
+                        values.put("username", username);
+                        if (videoUrl != null) {
+                            values.put("video_url", videoUrl);
+                            values.put("is_video", 1);
+                        }
+                        if (imageUrl != null) values.put("image_url", imageUrl);
+                        if (takenAtMillis != null) values.put("taken_at_ms", takenAtMillis);
+                        getWritableDatabase().update("instants", values, "media_id=?", new String[]{existingId});
+                        return;
+                    }
+
+                    // If existing is photo only and new has video, upgrade to video
+                    if (existing[2].equals("0") && video && videoUrl != null) {
+                        ContentValues values = new ContentValues();
+                        values.put("video_url", videoUrl);
+                        values.put("is_video", 1);
+                        if (newHasUser && !hasExistingUser) values.put("username", username);
+                        getWritableDatabase().update("instants", values, "media_id=?", new String[]{existingId});
+                    }
+                    return; // Already recorded, do NOT insert duplicate!
+                }
+
                 ContentValues values = new ContentValues();
                 values.put("media_id", id);
                 values.put("username", username);
@@ -146,32 +239,75 @@ public final class InstantsVault {
                 values.put("taken_at_ms", takenAtMillis);
                 values.put("captured_at_ms", System.currentTimeMillis());
                 getWritableDatabase().insertWithOnConflict(
-                        "instants", null, values, SQLiteDatabase.CONFLICT_IGNORE);
+                        "instants", null, values, SQLiteDatabase.CONFLICT_REPLACE);
             } catch (Throwable failure) {
                 Logger.printException(() -> "Save Instants: could not write the vault", failure);
             }
         }
 
+        public void insert(String id, String username, String imageUrl, String videoUrl,
+                    boolean video, Long takenAtMillis) {
+            insertOrUpdate(id, username, imageUrl, videoUrl, video, takenAtMillis);
+        }
+
         public List<String[]> allRows() {
             List<String[]> rows = new ArrayList<>();
+            java.util.Map<String, Integer> seenKeyIndex = new java.util.HashMap<>();
+            List<String> idsToDelete = new ArrayList<>();
+
             try (Cursor cursor = getReadableDatabase().query(
                     "instants",
                     new String[]{"media_id", "username", "image_url", "video_url",
                             "is_video", "taken_at_ms"},
                     null, null, null, null, "captured_at_ms DESC")) {
                 while (cursor.moveToNext()) {
-                    rows.add(new String[]{
-                            cursor.getString(0),
-                            cursor.getString(1),
-                            cursor.getString(2),
-                            cursor.getString(3),
-                            String.valueOf(cursor.getInt(4)),
-                            cursor.isNull(5) ? null : String.valueOf(cursor.getLong(5)),
-                    });
+                    String rowId = cursor.getString(0);
+                    String rowUser = cursor.getString(1);
+                    String rowImg = cursor.getString(2);
+                    String rowVid = cursor.getString(3);
+                    String isVid = String.valueOf(cursor.getInt(4));
+                    String taken = cursor.isNull(5) ? null : String.valueOf(cursor.getLong(5));
+
+                    String[] rowData = new String[]{rowId, rowUser, rowImg, rowVid, isVid, taken};
+
+                    String base = basePk(rowId);
+                    String cleanVid = cleanUrl(rowVid);
+                    String cleanImg = cleanUrl(rowImg);
+
+                    String dedupeKey = !base.isEmpty() ? base : (cleanVid != null ? cleanVid : cleanImg);
+                    if (dedupeKey != null && seenKeyIndex.containsKey(dedupeKey)) {
+                        int prevIdx = seenKeyIndex.get(dedupeKey);
+                        String[] prevRow = rows.get(prevIdx);
+                        boolean prevHasUser = prevRow[1] != null && !prevRow[1].trim().isEmpty();
+                        boolean currHasUser = rowUser != null && !rowUser.trim().isEmpty();
+
+                        if (!prevHasUser && currHasUser) {
+                            idsToDelete.add(prevRow[0]);
+                            rows.set(prevIdx, rowData);
+                        } else {
+                            idsToDelete.add(rowId);
+                        }
+                    } else {
+                        if (dedupeKey != null) {
+                            seenKeyIndex.put(dedupeKey, rows.size());
+                        }
+                        rows.add(rowData);
+                    }
                 }
             } catch (Throwable failure) {
                 Logger.printException(() -> "Save Instants: could not read the vault", failure);
             }
+
+            if (!idsToDelete.isEmpty()) {
+                Utils.runOnBackgroundThread(() -> {
+                    try {
+                        for (String delId : idsToDelete) {
+                            getWritableDatabase().delete("instants", "media_id=?", new String[]{delId});
+                        }
+                    } catch (Throwable ignored) {}
+                });
+            }
+
             return rows;
         }
 

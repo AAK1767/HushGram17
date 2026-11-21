@@ -172,6 +172,7 @@ public enum PatchFamily {
     NEW_MESSAGE(FamilyNames.NEW_MESSAGE, "newMessage", null, Settings.HIDE_NEW_MESSAGE_BUTTON,
             Settings.HIDE_NEW_MESSAGE_SUGGESTIONS),
     INSTANTS(FamilyNames.INSTANTS, "instants", null, Settings.HIDE_INSTANTS),
+    SAVE_INSTANTS(FamilyNames.SAVE_INSTANTS, "saveInstants", null, Settings.SAVE_INSTANTS),
     SHARE_SHEET(FamilyNames.SHARE_SHEET, "shareSheet", null, Settings.HIDE_SHARE_SHEET_GROUP, Settings.HIDE_SHARE_SHEET_SEARCH),
     REPOST_BUTTON(FamilyNames.REPOST_BUTTON, "repostButton", null, Settings.HIDE_REPOST_BUTTON),
     HIDE_SHARE_BUTTON(FamilyNames.HIDE_SHARE_BUTTON, "hideShareButton", null, Settings.HIDE_SHARE_BUTTON),

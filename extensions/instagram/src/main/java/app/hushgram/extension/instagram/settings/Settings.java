@@ -1873,6 +1873,10 @@ public class Settings extends BaseSettings {
     public static final BooleanSetting HIDE_INSTANTS =
             new BooleanSetting("hushgram_hide_instants", FALSE, true);
 
+    /** Captures received Instants locally while the recipient is viewing them. Off to start. */
+    public static final BooleanSetting SAVE_INSTANTS =
+            new BooleanSetting("hushgram_save_instants", FALSE, true);
+
     /**
      * The New group button beside the share sheet's search bar, whichever form Instagram gives it,
      * and the button that sends to the people you picked there as a group. Off to start.

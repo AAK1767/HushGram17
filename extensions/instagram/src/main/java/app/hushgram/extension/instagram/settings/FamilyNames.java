@@ -89,6 +89,7 @@ public final class FamilyNames {
     public static final String INBOX_SUGGESTIONS = "Hide suggested accounts in DMs";
     public static final String NEW_MESSAGE = "Hide New message button and suggestions";
     public static final String INSTANTS = "Hide Instants";
+    public static final String SAVE_INSTANTS = "Save Instants";
     public static final String SHARE_SHEET = "Hide group buttons on the share sheet";
     public static final String REPOST_BUTTON = "Hide the Repost button";
     public static final String HIDE_SHARE_BUTTON = "Hide the Share button";

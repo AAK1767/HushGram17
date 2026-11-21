@@ -33,6 +33,7 @@ final class MessagesCategory {
                 || build.contains(PatchFamily.INBOX_SEARCH)
                 || build.contains(PatchFamily.INBOX_SUGGESTIONS) || build.contains(PatchFamily.NEW_MESSAGE)
                 || build.contains(PatchFamily.INSTANTS)
+                || build.contains(PatchFamily.SAVE_INSTANTS)
                 || build.contains(PatchFamily.THREAD_SEEN) || build.contains(PatchFamily.TYPING)
                 || build.contains(PatchFamily.DM_MEDIA_SEEN)
                 || build.contains(PatchFamily.ACTIVE_STATUS)
@@ -95,6 +96,11 @@ final class MessagesCategory {
                 messages.addPreference(toggle(context, Settings.HIDE_INSTANTS, L10n.t("Hide Instants"),
                         L10n.t("Removes the stack of Instants (quick photos from friends) from your messages. "
                                 + "Restart Instagram to see the change.")));
+            }
+            if (build.contains(PatchFamily.SAVE_INSTANTS)) {
+                messages.addPreference(toggle(context, Settings.SAVE_INSTANTS, L10n.t("Save Instants"),
+                        L10n.t("Keeps received view-once Instants on this phone while you view them, so they can "
+                                + "be reopened or downloaded later.")));
             }
             if (build.contains(PatchFamily.THREAD_SEEN)) {
                 messages.addPreference(toggle(context, Settings.READ_WITHOUT_SEEN_RECEIPT,

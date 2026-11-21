@@ -241,6 +241,10 @@ public final class SettingsStatus {
         return false;
     }
 
+    public static boolean saveInstants() {
+        return false;
+    }
+
     /** Rewritten by the Show when someone was last active patch. */
     public static boolean lastActive() {
         return false;

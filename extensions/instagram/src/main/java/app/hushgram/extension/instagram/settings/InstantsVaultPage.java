@@ -68,7 +68,8 @@ import app.hushgram.extension.shared.ui.Dim;
 
 /**
  * Saved Instants page: shows every Instant captured while viewing ephemeral media.
- * Tapping an item opens download, copy link, and deletion options.
+ * Tapping an item opens view, download, copy link, and deletion options.
+ * HushGram17 build 17.4 test.
  */
 @SuppressWarnings("deprecation")
 final class InstantsVaultPage {

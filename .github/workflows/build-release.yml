@@ -53,13 +53,6 @@ jobs:
             **/build/test-results/**
           if-no-files-found: ignore
 
-      - name: Find the bundle
-        id: bundle
-        run: |
-          MPP=$(ls patches/build/release/*.mpp 2>/dev/null | head -1)
-          echo "path=$MPP" >> "$GITHUB_OUTPUT"
-          echo "name=$(basename $MPP)" >> "$GITHUB_OUTPUT"
-
       - name: Determine tag
         id: tag
         run: |
@@ -68,6 +61,18 @@ jobs:
           else
             echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Find and rename the bundle
+        id: bundle
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          VERSION="${TAG#v}"
+          ORIGINAL_MPP=$(ls patches/build/release/*.mpp 2>/dev/null | head -1)
+          NEW_NAME="patches-${VERSION}.mpp"
+          NEW_PATH="patches/build/release/${NEW_NAME}"
+          mv "$ORIGINAL_MPP" "$NEW_PATH"
+          echo "path=$NEW_PATH" >> "$GITHUB_OUTPUT"
+          echo "name=$NEW_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Create Release
         uses: softprops/action-gh-release@v2

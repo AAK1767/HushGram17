@@ -2,8 +2,8 @@ name: Sync Upstream & Release
 
 on:
   schedule:
-    # Run every Sunday at midnight UTC (or change as desired)
-    - cron: '0 0 * * 0'
+    # Run every 3 days at midnight UTC (or change as desired)
+    - cron: '0 0 */3 * *'
   workflow_dispatch:
     inputs:
       force_build:

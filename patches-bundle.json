@@ -1,8 +1,8 @@
 {
   "name": "HushGram17",
-  "created_at": "2026-11-21T13:34:43",
-  "description": "## [0.0.21-hg17.2](https://github.com/AAK1767/HushGram17/releases/tag/v0.0.21-hg17.2) (2026-11-21)\n\n### Features in HushGram17\n\n* **Save Instants**: Captures received view-once Instants on this phone while viewing them, and saves them to a local vault so you can reopen, download, or copy links later. Starts off. Turn it on in HushGram settings > Messages.\n* Full upstream HushGram 0.0.21 feature set included.",
-  "download_url": "https://github.com/AAK1767/HushGram17/releases/download/v0.0.21-hg17.2/patches-0.0.21.mpp",
+  "created_at": "2026-11-21T15:00:00",
+  "description": "## [0.0.22](https://github.com/AAK1767/HushGram17/releases/tag/v0.0.22) (2026-11-21)\n\n### Features in HushGram17\n\n* **Save Instants**: Captures received view-once Instants with in-app viewer, grouping by user, delete confirmation, and allowlist filter.\n* Full upstream HushGram feature set included.",
+  "download_url": "https://github.com/AAK1767/HushGram17/releases/download/v0.0.22/patches-0.0.22.mpp",
   "signature_download_url": "",
-  "version": "0.0.21-hg17.2"
+  "version": "0.0.22"
 }

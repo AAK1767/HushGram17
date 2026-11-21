@@ -1,0 +1,131 @@
+name: Sync Upstream & Release
+
+on:
+  schedule:
+    # Run every Sunday at midnight UTC (or change as desired)
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+    inputs:
+      force_build:
+        description: 'Force rebuild and release even if already on latest tag'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  sync-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: custom-features
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch Upstream
+        run: |
+          git remote add upstream https://github.com/SysAdminDoc/HushGram.git || true
+          git fetch upstream --tags
+          git fetch upstream main
+
+      - name: Check for New Upstream Release
+        id: check_release
+        run: |
+          # Read current version from gradle.properties
+          CURRENT_VERSION=$(grep "^version" gradle.properties | cut -d'=' -f2 | tr -d ' ')
+          echo "Current version: $CURRENT_VERSION"
+
+          # Find latest upstream release tag (format: v0.0.XX)
+          LATEST_TAG=$(git tag -l "v*" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
+          echo "Latest upstream tag: $LATEST_TAG"
+          UPSTREAM_VERSION="${LATEST_TAG#v}"
+
+          echo "latest_tag=$LATEST_TAG" >> "$GITHUB_OUTPUT"
+          echo "upstream_version=$UPSTREAM_VERSION" >> "$GITHUB_OUTPUT"
+          echo "current_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+
+          if [ "$CURRENT_VERSION" != "$UPSTREAM_VERSION" ] || [ "${{ inputs.force_build }}" = "true" ]; then
+            echo "needs_update=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "needs_update=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Merge Upstream Release
+        if: steps.check_release.outputs.needs_update == 'true'
+        run: |
+          LATEST_TAG="${{ steps.check_release.outputs.latest_tag }}"
+          echo "Merging $LATEST_TAG into custom-features..."
+          git merge "$LATEST_TAG" -m "Merge upstream $LATEST_TAG into custom-features" --no-edit
+
+          # Update gradle.properties with new version
+          NEW_VERSION="${LATEST_TAG#v}"
+          sed -i "s/^version = .*/version = $NEW_VERSION/" gradle.properties
+
+      - name: Setup Java
+        if: steps.check_release.outputs.needs_update == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Gradle
+        if: steps.check_release.outputs.needs_update == 'true'
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build Patches Bundle (.mpp)
+        if: steps.check_release.outputs.needs_update == 'true'
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./gradlew :patches:buildAndroid --no-daemon
+
+      - name: Find Built Bundle
+        if: steps.check_release.outputs.needs_update == 'true'
+        id: bundle
+        run: |
+          MPP=$(ls patches/build/release/*.mpp 2>/dev/null | head -1)
+          echo "path=$MPP" >> "$GITHUB_OUTPUT"
+          echo "name=$(basename $MPP)" >> "$GITHUB_OUTPUT"
+
+      - name: Update patches-bundle.json
+        if: steps.check_release.outputs.needs_update == 'true'
+        run: |
+          TAG="${{ steps.check_release.outputs.latest_tag }}"
+          VERSION="${TAG#v}"
+          DOWNLOAD="https://github.com/${{ github.repository }}/releases/download/${TAG}/${{ steps.bundle.outputs.name }}"
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%S")
+          cat > patches-bundle.json << EOF
+          {
+            "created_at": "${TIMESTAMP}",
+            "description": "HushGram17 ${TAG} — personal fork with Save Instants patch.",
+            "download_url": "${DOWNLOAD}",
+            "signature_download_url": "",
+            "version": "${VERSION}"
+          }
+          EOF
+          git add gradle.properties patches-bundle.json
+          git diff --cached --quiet || git commit -m "Bump version to $VERSION and update patches-bundle.json"
+          git push origin custom-features
+
+      - name: Publish GitHub Release
+        if: steps.check_release.outputs.needs_update == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.check_release.outputs.latest_tag }}
+          name: "HushGram17 ${{ steps.check_release.outputs.latest_tag }}"
+          body: |
+            Automated HushGram17 build based on upstream release ${{ steps.check_release.outputs.latest_tag }}.
+
+            **Custom patches included:**
+            - Save Instants — auto-captures view-once Instants for later viewing/download
+
+            Download the `.mpp` below or configure this repo as your remote source in Morphe Manager.
+          files: ${{ steps.bundle.outputs.path }}
+          draft: false
+          prerelease: false

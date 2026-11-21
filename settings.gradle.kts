@@ -1,6 +1,6 @@
 import org.gradle.api.artifacts.repositories.MavenArtifactRepository
 
-rootProject.name = "hushgram"
+rootProject.name = "hushgram17"
 
 pluginManagement {
     val allowLocalPlugins = providers.gradleProperty("allowMavenLocal")

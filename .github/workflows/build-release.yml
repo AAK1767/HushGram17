@@ -1,0 +1,97 @@
+# Builds HushGram17 and publishes the .mpp as a GitHub Release.
+# Triggered when you push a tag like v0.0.21-hg17.1
+# or manually from Actions → Run workflow.
+
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag (e.g. v0.0.21-hg17.1)'
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history for version detection
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build the .mpp bundle
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./gradlew :patches:buildAndroid --no-daemon
+
+      - name: Find the bundle
+        id: bundle
+        run: |
+          MPP=$(ls patches/build/release/*.mpp 2>/dev/null | head -1)
+          echo "path=$MPP" >> "$GITHUB_OUTPUT"
+          echo "name=$(basename $MPP)" >> "$GITHUB_OUTPUT"
+
+      - name: Determine tag
+        id: tag
+        run: |
+          if [ -n "${{ github.event.inputs.tag_name }}" ]; then
+            echo "tag=${{ github.event.inputs.tag_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: "HushGram17 ${{ steps.tag.outputs.tag }}"
+          body: |
+            HushGram17 build based on upstream HushGram.
+
+            **Custom patches included:**
+            - Save Instants — auto-captures view-once Instants for later viewing/download
+
+            Download the `.mpp` and add it as a Local source in Morphe Manager,
+            or add this repo as a remote source.
+          files: ${{ steps.bundle.outputs.path }}
+          draft: false
+          prerelease: false
+
+      - name: Update patches-bundle.json
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          VERSION="${TAG#v}"
+          DOWNLOAD="https://github.com/${{ github.repository }}/releases/download/${TAG}/${{ steps.bundle.outputs.name }}"
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%S")
+          cat > patches-bundle.json << EOF
+          {
+            "created_at": "${TIMESTAMP}",
+            "description": "HushGram17 ${TAG} — personal fork with Save Instants patch.",
+            "download_url": "${DOWNLOAD}",
+            "signature_download_url": "",
+            "version": "${VERSION}"
+          }
+          EOF
+
+      - name: Commit updated bundle JSON
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add patches-bundle.json
+          git diff --cached --quiet || git commit -m "Update patches-bundle.json for ${{ steps.tag.outputs.tag }}"
+          git push origin HEAD:custom-features || true

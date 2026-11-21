@@ -1878,6 +1878,13 @@ public class Settings extends BaseSettings {
             new BooleanSetting("hushgram_save_instants", FALSE, true);
 
     /**
+     * Comma-separated list of usernames (without @) to capture Instants from.
+     * Empty string means capture from everyone. Not a switch, so excluded from backups.
+     */
+    public static final StringSetting SAVE_INSTANTS_ALLOWLIST =
+            new StringSetting("hushgram_save_instants_allowlist", "");
+
+    /**
      * The New group button beside the share sheet's search bar, whichever form Instagram gives it,
      * and the button that sends to the people you picked there as a group. Off to start.
      */

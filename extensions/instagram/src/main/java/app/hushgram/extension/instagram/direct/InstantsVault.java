@@ -41,6 +41,20 @@ public final class InstantsVault {
 
             Object owner = InstagramMedia.owner(media);
             String username = owner == null ? null : InstagramMedia.username(owner);
+
+            // Allowlist: if set, only capture from listed users
+            String allowlistRaw = Settings.SAVE_INSTANTS_ALLOWLIST.get();
+            if (allowlistRaw != null && !allowlistRaw.trim().isEmpty()) {
+                String[] allowed = allowlistRaw.split(",");
+                boolean matched = false;
+                String lowerUser = username == null ? "" : username.trim().toLowerCase(java.util.Locale.ROOT);
+                for (String entry : allowed) {
+                    String e = entry.trim().toLowerCase(java.util.Locale.ROOT);
+                    if (!e.isEmpty() && e.equals(lowerUser)) { matched = true; break; }
+                }
+                if (!matched) return;
+            }
+
             Long takenAt = InstagramMedia.takenAt(media);
 
             List<?> videoVersions = InstagramMedia.videoVersions(media);
@@ -180,6 +194,15 @@ public final class InstantsVault {
                 getWritableDatabase().delete("instants", "media_id=?", new String[]{id});
             } catch (Throwable failure) {
                 Logger.printException(() -> "Save Instants: could not delete from vault", failure);
+            }
+        }
+
+        /** Removes all rows for a given username. */
+        public void deleteByUsername(String username) {
+            try {
+                getWritableDatabase().delete("instants", "username=?", new String[]{username});
+            } catch (Throwable failure) {
+                Logger.printException(() -> "Save Instants: could not delete group from vault", failure);
             }
         }
 

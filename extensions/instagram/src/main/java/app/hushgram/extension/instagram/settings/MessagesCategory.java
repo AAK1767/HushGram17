@@ -112,6 +112,16 @@ final class MessagesCategory {
                     return true;
                 });
                 messages.addPreference(mark(vaultRow, SettingsIcons.DOWNLOADS));
+
+                Row allowlistRow = new Row(context);
+                allowlistRow.setTitle(L10n.t("Capture Instants from"));
+                allowlistRow.setSummary(L10n.t("Usernames to capture Instants from (empty = everyone). Tap to edit."));
+                allowlistRow.setPersistent(false);
+                allowlistRow.setOnPreferenceClickListener(tapped -> {
+                    InstantsVaultPage.openAllowlistDialog(tapped.getContext());
+                    return true;
+                });
+                messages.addPreference(mark(allowlistRow, SettingsIcons.SEARCH));
             }
             if (build.contains(PatchFamily.THREAD_SEEN)) {
                 messages.addPreference(toggle(context, Settings.READ_WITHOUT_SEEN_RECEIPT,

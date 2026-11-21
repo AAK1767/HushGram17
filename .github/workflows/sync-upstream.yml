@@ -37,24 +37,44 @@ jobs:
       - name: Check for New Upstream Release
         id: check_release
         run: |
-          # Read current version from gradle.properties
-          CURRENT_VERSION=$(grep "^version" gradle.properties | cut -d'=' -f2 | tr -d ' ')
+          # gradle.properties holds <maj>.<min>.<upstream patch * 100 + fork build>,
+          # e.g. 0.0.2105 = upstream 0.0.21, fork build 5 (tag v0.0.21-hg17.5).
+          CURRENT_VERSION=$(grep -E "^version" gradle.properties | head -n 1 | cut -d'=' -f2 | tr -d ' \r')
           echo "Current version: $CURRENT_VERSION"
+          IFS=. read -r C_MAJ C_MIN C_PAT <<< "$CURRENT_VERSION"
+          CURRENT_UPSTREAM="$C_MAJ.$C_MIN.$((10#$C_PAT / 100))"
+          CURRENT_FORK=$((10#$C_PAT % 100))
+          echo "Current upstream base: $CURRENT_UPSTREAM, fork build: $CURRENT_FORK"
 
           # Find latest upstream release tag (format: v0.0.XX)
           LATEST_TAG=$(git tag -l "v*" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
           echo "Latest upstream tag: $LATEST_TAG"
           UPSTREAM_VERSION="${LATEST_TAG#v}"
+          IFS=. read -r U_MAJ U_MIN U_PAT <<< "$UPSTREAM_VERSION"
+
+          NEEDS=false
+          FORK=1
+          if [ "$CURRENT_UPSTREAM" != "$UPSTREAM_VERSION" ]; then
+            NEEDS=true            # new upstream release: fork build restarts at 1
+          elif [ "${{ inputs.force_build }}" = "true" ]; then
+            NEEDS=true            # forced rebuild: next fork build, so Manager sees an update
+            FORK=$((CURRENT_FORK + 1))
+          fi
+          if [ "$FORK" -ge 100 ]; then
+            echo "::error::Fork build must stay under 100 per upstream version."
+            exit 1
+          fi
+
+          NEW_VERSION="$U_MAJ.$U_MIN.$((10#$U_PAT * 100 + FORK))"
+          NEW_TAG="v${UPSTREAM_VERSION}-hg17.${FORK}"
+          echo "New version: $NEW_VERSION, new tag: $NEW_TAG"
 
           echo "latest_tag=$LATEST_TAG" >> "$GITHUB_OUTPUT"
           echo "upstream_version=$UPSTREAM_VERSION" >> "$GITHUB_OUTPUT"
           echo "current_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
-
-          if [ "$CURRENT_VERSION" != "$UPSTREAM_VERSION" ] || [ "${{ inputs.force_build }}" = "true" ]; then
-            echo "needs_update=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "needs_update=false" >> "$GITHUB_OUTPUT"
-          fi
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "new_tag=$NEW_TAG" >> "$GITHUB_OUTPUT"
+          echo "needs_update=$NEEDS" >> "$GITHUB_OUTPUT"
 
       - name: Merge Upstream Release
         if: steps.check_release.outputs.needs_update == 'true'
@@ -63,9 +83,10 @@ jobs:
           echo "Merging $LATEST_TAG into main..."
           git merge "$LATEST_TAG" -m "Merge upstream $LATEST_TAG into main" --no-edit
 
-          # Update gradle.properties with new version
-          NEW_VERSION="${LATEST_TAG#v}"
+          # Update gradle.properties and the patch list with the new version
+          NEW_VERSION="${{ steps.check_release.outputs.new_version }}"
           sed -i "s/^version = .*/version = $NEW_VERSION/" gradle.properties
+          sed -i "0,/\"version\": \"v[^\"]*\"/s//\"version\": \"v$NEW_VERSION\"/" patches-list.json
 
       - name: Setup Java
         if: steps.check_release.outputs.needs_update == 'true'
@@ -110,12 +131,13 @@ jobs:
       - name: Update patches-bundle.json
         if: steps.check_release.outputs.needs_update == 'true'
         run: |
-          TAG="${{ steps.check_release.outputs.latest_tag }}"
-          VERSION="${TAG#v}"
+          TAG="${{ steps.check_release.outputs.new_tag }}"
+          VERSION="${{ steps.check_release.outputs.new_version }}"
           DOWNLOAD="https://github.com/${{ github.repository }}/releases/download/${TAG}/${{ steps.bundle.outputs.name }}"
           TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%S")
           cat > patches-bundle.json << EOF
           {
+            "name": "HushGram17",
             "created_at": "${TIMESTAMP}",
             "description": "HushGram17 ${TAG} — personal fork with Save Instants patch.",
             "download_url": "${DOWNLOAD}",
@@ -123,7 +145,7 @@ jobs:
             "version": "${VERSION}"
           }
           EOF
-          git add gradle.properties patches-bundle.json
+          git add gradle.properties patches-list.json patches-bundle.json
           git diff --cached --quiet || git commit -m "Bump version to $VERSION and update patches-bundle.json"
           git push origin main
 
@@ -131,10 +153,12 @@ jobs:
         if: steps.check_release.outputs.needs_update == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.check_release.outputs.latest_tag }}
-          name: "HushGram17 ${{ steps.check_release.outputs.latest_tag }}"
+          tag_name: ${{ steps.check_release.outputs.new_tag }}
+          name: "HushGram17 ${{ steps.check_release.outputs.new_tag }}"
           body: |
             Automated HushGram17 build based on upstream release ${{ steps.check_release.outputs.latest_tag }}.
+
+            Bundle version `${{ steps.check_release.outputs.new_version }}`.
 
             **Custom patches included:**
             - Save Instants — auto-captures view-once Instants for later viewing/download

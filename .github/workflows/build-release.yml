@@ -38,8 +38,20 @@ jobs:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -o pipefail
           chmod +x ./gradlew
-          ./gradlew :patches:buildAndroid --no-daemon
+          ./gradlew :patches:buildAndroid --no-daemon --stacktrace 2>&1 | tee gradle-build.log
+
+      - name: Upload Build Failure Logs and Reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-failure-logs
+          path: |
+            gradle-build.log
+            **/build/reports/**
+            **/build/test-results/**
+          if-no-files-found: ignore
 
       - name: Find the bundle
         id: bundle

@@ -80,12 +80,20 @@ jobs:
         if: steps.check_release.outputs.needs_update == 'true'
         run: |
           LATEST_TAG="${{ steps.check_release.outputs.latest_tag }}"
-          echo "Merging $LATEST_TAG into main..."
-          git merge "$LATEST_TAG" -m "Merge upstream $LATEST_TAG into main" --no-edit
-
-          # Update gradle.properties and the patch list with the new version
           NEW_VERSION="${{ steps.check_release.outputs.new_version }}"
-          sed -i "s/^version = .*/version = $NEW_VERSION/" gradle.properties
+          echo "Merging $LATEST_TAG into main..."
+          # --no-commit stops before the merge commit, so the conflicts every fork merge hits can be
+          # resolved first. A plain merge failed here on CHANGELOG.md, README.md, gradle.properties,
+          # patches-list.json and DefaultCatalogTest.kt.
+          git merge "$LATEST_TAG" --no-commit --no-ff || echo "Merge stopped on conflicts; resolving the known files."
+          # Resolves those files and fixes the drift a clean auto-merge leaves in the catalog test.
+          # Exits 2, and fails this job, on any conflict it doesn't know, so a person looks at that one.
+          python3 scripts/resolve-upstream-merge.py --version "$NEW_VERSION"
+          if [ -f .git/MERGE_HEAD ]; then
+            git commit -m "Merge upstream $LATEST_TAG into main"
+          fi
+
+          # The next step regenerates the patch list; this keeps its version right until then.
           sed -i "0,/\"version\": \"v[^\"]*\"/s//\"version\": \"v$NEW_VERSION\"/" patches-list.json
 
       - name: Setup Java
@@ -98,6 +106,23 @@ jobs:
       - name: Setup Gradle
         if: steps.check_release.outputs.needs_update == 'true'
         uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup Python
+        if: steps.check_release.outputs.needs_update == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Regenerate Patch List and README Table
+        if: steps.check_release.outputs.needs_update == 'true'
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -o pipefail
+          chmod +x ./gradlew
+          ./gradlew :patches:generatePatchesList --no-daemon --stacktrace 2>&1 | tee gradle-build.log
+          python -I -X utf8 scripts/gen-readme-patches.py
 
       - name: Build Patches Bundle (.mpp)
         if: steps.check_release.outputs.needs_update == 'true'
@@ -145,7 +170,7 @@ jobs:
             "version": "${VERSION}"
           }
           EOF
-          git add gradle.properties patches-list.json patches-bundle.json
+          git add gradle.properties patches-list.json patches-bundle.json README.md
           git diff --cached --quiet || git commit -m "Bump version to $VERSION and update patches-bundle.json"
           git push origin main
 
